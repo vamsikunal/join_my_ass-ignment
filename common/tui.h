@@ -163,6 +163,7 @@ static inline void tui_fmt_rate(char *buf, long hps) {
 /* ── Status Color ────────────────────────────────────────────── */
 static inline const char *tui_state_color(const char *status) {
     if (strncmp(status, "MINING", 6) == 0) return ANSI_BGREEN;
+    if (strncmp(status, "LATE",   4) == 0) return ANSI_MAGENTA;
     if (strncmp(status, "WAIT",   4) == 0) return ANSI_BYELLOW;
     if (strncmp(status, "IDLE",   4) == 0) return ANSI_DIM;
     if (strncmp(status, "DEAD",   4) == 0) return ANSI_BRED;
