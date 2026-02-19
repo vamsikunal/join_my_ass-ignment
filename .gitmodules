@@ -1,0 +1,3 @@
+[submodule "hashcash"]
+	path = hashcash
+	url = https://github.com/hashcash-org/hashcash.git

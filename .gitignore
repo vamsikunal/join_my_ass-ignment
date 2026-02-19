@@ -1,0 +1,15 @@
+# compiled binaries
+bin/
+
+# object files
+*.o
+common/*.o
+
+# editor / OS junk
+.DS_Store
+*.swp
+*.swo
+*~
+
+# results data (coordinator writes this at runtime — don't commit data)
+results/results.csv
