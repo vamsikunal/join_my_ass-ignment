@@ -221,12 +221,31 @@ static void* tui_thread(void *arg) {
 
         long elapsed_ms = g_stop_flag ? 0 : (now_ms() - g_round_start_ms);
         tui_fmt_time(time_buf, elapsed_ms);
-        tui_fmt_rate(rate_buf, g_hashrate);
+
+        /* Use cached g_hashrate — never call hashcash_per_sec() here.
+         * That function runs an internal benchmark and conflicts with
+         * the stats thread, causing the TUI to freeze. */
+        long hr = g_hashrate;
+        tui_fmt_rate(rate_buf, hr);
 
         const char *status     = g_stop_flag ? "IDLE" : "MINING";
         const char *status_col = tui_state_color(status);
 
         tui_clear();
+
+        /* ── Intro banner (static info, always visible) ── */
+        printf(ANSI_BOLD ANSI_BCYAN
+               "  CS740 — Distributed Hashcash Proof-of-Work  |  Lab Experiment\n"
+               ANSI_RESET);
+        printf(ANSI_DIM
+               "  What    : SHA-1 based Proof-of-Work (hashcash.org original library)\n"
+               "  Goal    : Find a stamp with N leading zero bits in SHA-1 hash\n"
+               "  Results : ~/distributed-pow/results.csv  (updated after every round)\n"
+               "  Verify  : hashcash -c -b <bits> -r distributed-pow-lab <stamp>\n"
+               ANSI_RESET);
+        printf("\n");
+
+        /* ── Main TUI box ── */
         tui_top();
         tui_title(ANSI_BCYAN, "DISTRIBUTED HASHCASH  —  WORKER");
         tui_divider();
@@ -234,10 +253,6 @@ static void* tui_thread(void *arg) {
         /* Connection info */
         tui_kv("Coordinator :", ANSI_BWHITE, coord_addr);
         tui_kv("My IP       :", ANSI_BWHITE, my_ip);
-
-        char status_line[64];
-        snprintf(status_line, sizeof(status_line), "%s%s%s",
-                 status_col, status, ANSI_RESET);
         tui_kv("Status      :", status_col, status);
 
         tui_divider();
@@ -245,9 +260,9 @@ static void* tui_thread(void *arg) {
         /* Mining info */
         char bits_str[16];
         if (g_current_bits > 0)
-            snprintf(bits_str, sizeof(bits_str), "%d", g_current_bits);
+            snprintf(bits_str, sizeof(bits_str), "%d  bits", g_current_bits);
         else
-            strncpy(bits_str, "—", sizeof(bits_str));
+            strncpy(bits_str, "waiting...", sizeof(bits_str));
 
         tui_kv("Difficulty  :", ANSI_BYELLOW, bits_str);
         tui_kv("Resource    :", ANSI_DIM, HC_RESOURCE);
@@ -258,15 +273,16 @@ static void* tui_thread(void *arg) {
 
         tui_divider();
 
-        /* Performance */
-        tui_kv("Hash Rate   :", ANSI_BGREEN, rate_buf);
+        /* Performance — computed from cached rate only, no library calls */
+        tui_kv("Hash Rate   :", ANSI_BGREEN,
+               hr > 0 ? rate_buf : "benchmarking...");
         tui_kv("Round Time  :", ANSI_BWHITE, time_buf);
 
-        /* Estimate remaining (rough: based on hashcash_estimate_time) */
-        if (!g_stop_flag && g_current_bits > 0) {
-            double est_total_s = hashcash_estimate_time(g_current_bits);
-            double elapsed_s   = elapsed_ms / 1000.0;
-            double remain_s    = est_total_s - elapsed_s;
+        /* Estimate: expected_tries(bits) / cached_rate — no benchmark call */
+        if (!g_stop_flag && g_current_bits > 0 && hr > 0) {
+            double expected = hashcash_expected_tries(g_current_bits);
+            double elapsed_s = elapsed_ms / 1000.0;
+            double remain_s  = (expected / (double)hr) - elapsed_s;
             if (remain_s < 0) remain_s = 0;
             char rem_buf[12];
             tui_fmt_time(rem_buf, (long)(remain_s * 1000));
@@ -282,7 +298,7 @@ static void* tui_thread(void *arg) {
         snprintf(won_str, sizeof(won_str), "%-4d    Participated: %d",
                  g_rounds_won, g_rounds_part);
         tui_kv("Rounds Won  :", ANSI_BGREEN, won_str);
-        tui_kv("Results     :", ANSI_DIM, "~/distributed-pow/results.csv");
+        tui_kv("Results     :", ANSI_BWHITE, "~/distributed-pow/results.csv");
 
         tui_bottom();
         fflush(stdout);
